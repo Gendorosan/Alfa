@@ -1,0 +1,125 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Net;
+
+namespace AlfaConsole
+{
+    class Program
+    {
+        private static void GetUniversity(string university_id)
+        {
+            WebRequest request = WebRequest.Create("https://api.hh.ru/educational_institutions?id=" + university_id);
+            request.Headers.Add("User-Agent", "alfa (ckakodybcsgo@gmail.com)");
+            WebResponse response = request.GetResponse();
+
+            Stream stream = response.GetResponseStream();
+            StreamReader sr = new StreamReader(stream);
+            string s = sr.ReadToEnd();
+
+            JObject unversity = JObject.Parse(s);
+            string text = (string)unversity["items"][0]["text"];
+            string id = (string)unversity["items"][0]["id"];
+            string acronym = (string)unversity["items"][0]["acronym"];
+            string synonyms = (string)unversity["items"][0]["synonyms"];
+            string area = (string)unversity["items"][0]["area"]["name"];
+            string area_id = (string)unversity["items"][0]["area"]["id"];
+
+            string connectionString = @"Data Source=.\SQLEXPRESS;Initial Catalog=University;Integrated Security=True";
+
+            string sqlExpression = "select * from Area where id = '" + area_id + "';";
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                SqlCommand first_command = new SqlCommand(sqlExpression, connection);
+                SqlDataReader reader = first_command.ExecuteReader();
+
+                if (!reader.HasRows)
+                {
+                    reader.Close();
+                    string sqlExpression_area = "insert into Area values('" + area_id + "', '" + area + "')";
+                    SqlCommand second_command = new SqlCommand(sqlExpression_area, connection);
+                    int Area = second_command.ExecuteNonQuery();
+                    Console.WriteLine("Добавлено объектов: {0}", Area);
+
+                }
+                else reader.Close();
+
+                string sqlExpression_find_university = "select * from University where id = '" + id + "';";
+                SqlCommand third_command = new SqlCommand(sqlExpression_find_university, connection);
+                SqlDataReader second_reader = third_command.ExecuteReader();
+                if (!second_reader.HasRows)
+                {
+                    second_reader.Close();
+                    string sqlExpression_university = "insert into University values ('" + id + "','" + acronym + "','" + text + "','" + synonyms + "','" + area_id + "');";
+                    SqlCommand command = new SqlCommand(sqlExpression_university, connection);
+                    int University = command.ExecuteNonQuery();
+                    Console.WriteLine("Добавлено объектов: {0}", University);
+
+                }
+                else second_reader.Close();
+
+
+            }
+
+            
+        }
+
+            private static void GetFaculties(string university_id)
+            {
+                WebRequest faculties_request = WebRequest.Create("https://api.hh.ru/educational_institutions/"+ university_id +"/faculties");
+                faculties_request.Headers.Add("User-Agent", "alfa (ckakodybcsgo@gmail.com)");
+                WebResponse faculties_response = faculties_request.GetResponse();
+
+                Stream stream = faculties_response.GetResponseStream();
+                StreamReader sr = new StreamReader(stream);
+                string s = sr.ReadToEnd();
+
+                JArray jsonArray = JArray.Parse(s);
+
+
+                foreach (dynamic faculties in jsonArray)
+                {
+                    var id = faculties["id"];
+                    var name = faculties["name"];
+
+                    string connectionString = @"Data Source=.\SQLEXPRESS;Initial Catalog=University;Integrated Security=True";
+
+                    string sqlExpression = "select * from Faculties where id = " + id + " and university_id = "+ university_id + ";";
+                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    {
+                        connection.Open();
+                        SqlCommand first_command = new SqlCommand(sqlExpression, connection);
+                        SqlDataReader reader = first_command.ExecuteReader();
+
+                        if (!reader.HasRows)
+                        {
+                            reader.Close();
+                            string sqlExpression_area = "insert into Faculties values('" + id + "', '" + name + "', '"+ university_id + "')";
+                            SqlCommand second_command = new SqlCommand(sqlExpression_area, connection);
+                            int Area = second_command.ExecuteNonQuery();
+                            Console.WriteLine("Добавлено объектов: {0}", Area);
+
+                        }
+                        else reader.Close();
+                    }
+
+                }
+
+
+            }
+            static void Main(string[] args)
+            {
+
+                Console.WriteLine("Введите Id университета");
+                var university_id = Console.ReadLine();
+                GetUniversity(university_id);
+                GetFaculties(university_id);
+
+            }
+    }
+}
